@@ -1,72 +1,174 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  Activity, ArrowDownRight, ArrowUpRight, Bell, CalendarDays, Check,
-  ChevronDown, CircleHelp, ClipboardList, Clock3, Command, Hotel,
-  LayoutDashboard, LifeBuoy, MessageSquare, MoreHorizontal, Plus,
-  Search, Settings2, Sparkles, Users, WandSparkles
+  Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays,
+  Check, CheckCircle2, ChevronDown, Clock3, CreditCard, MessageCircle,
+  MoreHorizontal, Plus, Search, Settings, Scissors, Send, Sparkles,
+  UserRound, Users, X, Zap
 } from "lucide-react";
 
-const initialTasks = [
-  { id: 1, title: "Reply to late check-in request", detail: "Room 204 · WhatsApp", time: "2 min ago", status: "Needs attention", priority: "high" },
-  { id: 2, title: "Prepare room 108 for arrival", detail: "Housekeeping · Today, 14:00", time: "18 min ago", status: "In progress", priority: "normal" },
-  { id: 3, title: "Confirm airport transfer", detail: "Guest: Olivia Martin · Email", time: "31 min ago", status: "Waiting", priority: "normal" },
-  { id: 4, title: "Review maintenance request", detail: "Room 312 · Air conditioning", time: "46 min ago", status: "Needs attention", priority: "high" }
+type Tab = "Overview" | "Appointments" | "Customers" | "Services" | "Settings";
+type Appointment = {
+  id: number; customer: string; initials: string; service: string;
+  staff: string; time: string; duration: string; status: "Confirmed" | "Waiting" | "Cancelled";
+  color: string;
+};
+type Service = { id: number; name: string; duration: number; price: number };
+
+const seedAppointments: Appointment[] = [
+  { id: 1, customer: "Sophie Weber", initials: "SW", service: "Classic haircut", staff: "Alex", time: "09:30", duration: "30 min", status: "Confirmed", color: "lavender" },
+  { id: 2, customer: "Daniel Fischer", initials: "DF", service: "Skin fade", staff: "Marco", time: "10:00", duration: "45 min", status: "Confirmed", color: "blue" },
+  { id: 3, customer: "Emma Schneider", initials: "ES", service: "Manicure", staff: "Mia", time: "11:15", duration: "45 min", status: "Waiting", color: "peach" },
+  { id: 4, customer: "Noah Wagner", initials: "NW", service: "Beard trim", staff: "Alex", time: "13:00", duration: "20 min", status: "Confirmed", color: "mint" },
+  { id: 5, customer: "Lena Hoffmann", initials: "LH", service: "Gel nails", staff: "Mia", time: "14:30", duration: "60 min", status: "Confirmed", color: "pink" },
 ];
 
-const nav = [
-  { label: "Overview", icon: LayoutDashboard },
-  { label: "Guest messages", icon: MessageSquare, count: "8" },
-  { label: "Tasks & operations", icon: ClipboardList, count: "4" },
-  { label: "Guests", icon: Users },
-  { label: "Calendar", icon: CalendarDays }
+const seedServices: Service[] = [
+  { id: 1, name: "Classic haircut", duration: 30, price: 28 },
+  { id: 2, name: "Skin fade", duration: 45, price: 35 },
+  { id: 3, name: "Beard trim", duration: 20, price: 18 },
+  { id: 4, name: "Manicure", duration: 45, price: 32 },
+  { id: 5, name: "Gel nails", duration: 60, price: 48 },
+];
+
+const navItems: { name: Tab; icon: typeof Activity }[] = [
+  { name: "Overview", icon: Activity },
+  { name: "Appointments", icon: CalendarDays },
+  { name: "Customers", icon: Users },
+  { name: "Services", icon: Scissors },
+  { name: "Settings", icon: Settings },
 ];
 
 export default function Home() {
-  const [active, setActive] = useState("Overview");
-  const [tasks, setTasks] = useState(initialTasks);
-  const [showAssistant, setShowAssistant] = useState(false);
-  const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<Tab>("Overview");
+  const [businessName, setBusinessName] = useState("The Corner Studio");
+  const [businessType, setBusinessType] = useState("Barbershop");
+  const [appointments, setAppointments] = useState(seedAppointments);
+  const [services, setServices] = useState(seedServices);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [newCustomer, setNewCustomer] = useState("");
+  const [newService, setNewService] = useState(seedServices[0].name);
+  const [newTime, setNewTime] = useState("15:30");
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState([
+    { role: "assistant", text: "Hi! I'm your studio assistant. I can help manage appointments, answer customer questions and follow up on cancellations. What would you like to do?" }
+  ]);
+  const [search, setSearch] = useState("");
+  const [toast, setToast] = useState("");
 
-  const completeTask = (id: number) => setTasks((current) => current.filter((task) => task.id !== id));
+  const confirmed = appointments.filter(a => a.status === "Confirmed").length;
+  const cancelled = appointments.filter(a => a.status === "Cancelled").length;
+  const todayRevenue = appointments.filter(a => a.status === "Confirmed").reduce((sum, a) => sum + (services.find(s => s.name === a.service)?.price ?? 0), 0);
+  const filteredAppointments = useMemo(() => appointments.filter(a =>
+    [a.customer, a.service, a.staff, a.time].some(v => v.toLowerCase().includes(search.toLowerCase()))
+  ), [appointments, search]);
+
+  function notify(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 2600);
+  }
+
+  function cancelAppointment(id: number) {
+    setAppointments(current => current.map(a => a.id === id ? { ...a, status: "Cancelled" } : a));
+    notify("Appointment cancelled. The slot is now available to recover.");
+  }
+
+  function recoverSlot(id: number) {
+    const appointment = appointments.find(a => a.id === id);
+    if (!appointment) return;
+    setAppointments(current => current.map(a => a.id === id ? { ...a, status: "Confirmed" } : a));
+    notify("Waiting-list customer matched. Demo slot marked as filled.");
+  }
+
+  function addAppointment() {
+    if (!newCustomer.trim()) return;
+    const selected = services.find(s => s.name === newService) ?? services[0];
+    setAppointments(current => [...current, {
+      id: Date.now(), customer: newCustomer.trim(),
+      initials: newCustomer.trim().split(/\s+/).map(v => v[0]).join("").slice(0, 2).toUpperCase(),
+      service: selected?.name ?? "Appointment", staff: "Unassigned", time: newTime,
+      duration: selected ? selected.duration + " min" : "30 min", status: "Confirmed", color: "lavender"
+    }].sort((a,b) => a.time.localeCompare(b.time)));
+    setNewCustomer("");
+    setBookingOpen(false);
+    notify("Appointment added to today's schedule.");
+  }
+
+  function sendChat() {
+    const text = chatInput.trim();
+    if (!text) return;
+    setChatMessages(current => [...current, { role: "user", text }, { role: "assistant", text: "This demo is using sample data. Once we connect the AI model and your booking calendar, I'll be able to carry out this task for your business." }]);
+    setChatInput("");
+  }
+
+  const pageTitle: Record<Tab, string> = {
+    Overview: "Good morning",
+    Appointments: "Appointments",
+    Customers: "Customers",
+    Services: "Services & pricing",
+    Settings: "Business settings"
+  };
 
   return (
-    <main className="app-shell">
+    <main className="shell">
       <aside className="sidebar">
-        <div className="brand"><div className="brand-mark"><Sparkles size={19} /></div><span>nüdling<span className="brand-ai">.ai</span></span></div>
-        <div className="workspace-switch"><div className="hotel-icon"><Hotel size={17} /></div><div><strong>Demo Hotel</strong><small>Workspace</small></div><ChevronDown size={15} /></div>
-        <div className="nav-label">WORKSPACE</div>
-        <nav>{nav.map((item) => <button key={item.label} className={active === item.label ? "nav-item active" : "nav-item"} onClick={() => setActive(item.label)}><item.icon size={18} /><span>{item.label}</span>{item.count && <small>{item.count}</small>}</button>)}</nav>
-        <div className="nav-label tools-label">MANAGE</div>
-        <button className="nav-item" onClick={() => setActive("Settings")}><Settings2 size={18} /><span>Settings</span></button>
-        <div className="sidebar-bottom"><div className="help-card"><div className="help-icon"><LifeBuoy size={17} /></div><strong>Need a hand?</strong><p>Our team is here to help you get set up.</p><button onClick={() => setShowAssistant(true)}>Ask the assistant <ArrowUpRight size={14} /></button></div><div className="profile"><div className="avatar">JD</div><div><strong>Jordan Davis</strong><small>Hotel manager</small></div><MoreHorizontal size={18} /></div></div>
+        <div className="brand"><div className="brand-symbol"><Sparkles size={19}/></div><span>studio<span className="brand-accent">flow</span></span></div>
+        <button className="business-switch" onClick={() => setActiveTab("Settings")}><div className="business-avatar"><Scissors size={17}/></div><div className="business-switch-copy"><strong>{businessName}</strong><small>{businessType}</small></div><ChevronDown size={15}/></button>
+        <div className="side-label">WORKSPACE</div>
+        <nav className="nav-list">{navItems.map(item => <button key={item.name} className={activeTab === item.name ? "nav-link selected" : "nav-link"} onClick={() => setActiveTab(item.name)}><item.icon size={18}/><span>{item.name}</span>{item.name === "Appointments" && <small>{appointments.filter(a => a.status === "Confirmed").length}</small>}</button>)}</nav>
+        <div className="sidebar-bottom">
+          <div className="ai-card"><div className="ai-card-icon"><Zap size={16}/></div><strong>Your assistant is ready</strong><p>Connect your channels to start handling customer requests.</p><button onClick={() => setAssistantOpen(true)}>Open assistant <ArrowUpRight size={14}/></button></div>
+          <div className="user-profile"><div className="user-avatar">JD</div><div><strong>Studio owner</strong><small>Admin account</small></div><MoreHorizontal size={18}/></div>
+        </div>
       </aside>
 
-      <section className="main-area">
-        <header className="topbar"><div className="breadcrumbs">Demo Hotel <span>/</span> <strong>{active}</strong></div><div className="top-actions"><div className="search"><Search size={16} /><input placeholder="Search anything..." /></div><button className="icon-button" aria-label="Notifications"><Bell size={18} /><i /></button><div className="top-avatar">JD</div></div></header>
+      <section className="main">
+        <header className="topbar">
+          <div className="crumb">{businessName}<span>/</span><strong>{activeTab}</strong></div>
+          <div className="topbar-actions"><label className="searchbox"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search appointments..."/></label><button className="notification-button" aria-label="Notifications"><Bell size={18}/><i/></button><div className="user-avatar small">JD</div></div>
+        </header>
         <div className="content">
-          <div className="page-heading"><div><div className="eyebrow">MONDAY, NOVEMBER 3, 2026</div><h1>Good evening, Jordan <span>✦</span></h1><p>Here’s what’s happening at your hotel today.</p></div><button className="primary-button" onClick={() => setShowAssistant(true)}><WandSparkles size={16} /> Ask AI assistant</button></div>
+          <div className="heading-row"><div><div className="eyebrow">TUESDAY, NOVEMBER 3, 2026</div><h1>{pageTitle[activeTab]}{activeTab === "Overview" ? ", Alex" : ""}<span className="heading-spark"> ✦</span></h1><p>{activeTab === "Overview" ? "Here's what's happening at your business today." : "Manage your business from one simple workspace."}</p></div><button className="primary-button" onClick={() => setBookingOpen(true)}><Plus size={16}/> New appointment</button></div>
 
-          <div className="metric-grid">
-            <article className="metric-card"><div className="metric-top"><span>Occupancy</span><span className="metric-icon purple"><Hotel size={17} /></span></div><div className="metric-value">82<span>%</span></div><div className="metric-foot"><span className="positive"><ArrowUpRight size={14} /> 6.4%</span><span>vs. last week</span></div><div className="mini-bars">{[38,55,48,67,58,78,82,69,88,74,82,95].map((h,i)=><i key={i} style={{height:h+"%"}} />)}</div></article>
-            <article className="metric-card"><div className="metric-top"><span>Arrivals today</span><span className="metric-icon blue"><Users size={17} /></span></div><div className="metric-value">24</div><div className="metric-foot"><span className="muted-strong">16 checked in</span><span>8 expected</span></div><div className="progress-track"><i style={{width:"67%"}} /></div></article>
-            <article className="metric-card"><div className="metric-top"><span>Open tasks</span><span className="metric-icon amber"><ClipboardList size={17} /></span></div><div className="metric-value">{tasks.length.toString().padStart(2,"0")}</div><div className="metric-foot"><span className="warning">2 need attention</span><span>Across all teams</span></div><div className="task-dots"><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/></div></article>
-            <article className="metric-card"><div className="metric-top"><span>Guest satisfaction</span><span className="metric-icon green"><Activity size={17} /></span></div><div className="metric-value">4.8<span className="out-of">/5</span></div><div className="metric-foot"><span className="positive"><ArrowUpRight size={14} /> 0.3</span><span>from 126 reviews</span></div><div className="rating-stars">★★★★★</div></article>
-          </div>
+          {activeTab === "Overview" && <>
+            <div className="stats-grid">
+              <article className="stat-card"><div className="stat-label">Appointments today <span className="stat-icon purple"><CalendarDays size={17}/></span></div><div className="stat-number">{appointments.length.toString().padStart(2,"0")}</div><div className="stat-foot"><span className="trend"><ArrowUpRight size={13}/> 12%</span> compared with last week</div></article>
+              <article className="stat-card"><div className="stat-label">Confirmed bookings <span className="stat-icon blue"><CheckCircle2 size={17}/></span></div><div className="stat-number">{confirmed.toString().padStart(2,"0")}</div><div className="stat-foot">Appointments confirmed today</div></article>
+              <article className="stat-card"><div className="stat-label">Estimated revenue <span className="stat-icon green"><CreditCard size={17}/></span></div><div className="stat-number">€{todayRevenue}</div><div className="stat-foot">Based on confirmed services</div></article>
+              <article className="stat-card"><div className="stat-label">Slots recovered <span className="stat-icon orange"><Zap size={17}/></span></div><div className="stat-number">{cancelled.toString().padStart(2,"0")}</div><div className="stat-foot">Cancellations to follow up</div></article>
+            </div>
 
-          <div className="section-grid">
-            <section className="panel operations-panel"><div className="panel-heading"><div><h2>Operations overview</h2><p>Keep track of what needs to get done.</p></div><button className="text-button" onClick={() => setActive("Tasks & operations")}>View all <ArrowUpRight size={14}/></button></div><div className="task-list">{tasks.map((task) => <div className="task-row" key={task.id}><button className="check-button" aria-label="Complete task" onClick={() => completeTask(task.id)}><Check size={13}/></button><div className="task-copy"><strong>{task.title}</strong><small>{task.detail}</small></div><span className={task.priority === "high" ? "status-pill urgent" : "status-pill"}>{task.status}</span><span className="task-time">{task.time}</span></div>)}{tasks.length === 0 && <div className="empty-state">All caught up. No open tasks.</div>}</div><button className="add-task" onClick={() => setTasks((current) => [...current,{id:Date.now(),title:"New operational task",detail:"Added manually · Demo",time:"Now",status:"Waiting",priority:"normal"}])}><Plus size={15}/> Add a task</button></section>
+            <div className="dashboard-grid">
+              <section className="panel schedule-panel"><div className="panel-title"><div><h2>Today's schedule</h2><p>Your appointments at a glance.</p></div><button className="link-button" onClick={() => setActiveTab("Appointments")}>View calendar <ArrowRight size={14}/></button></div>
+                <div className="appointment-list">{appointments.slice().sort((a,b)=>a.time.localeCompare(b.time)).slice(0,6).map(a => <div className="appointment-row" key={a.id}><div className="time-block">{a.time}<small>{a.duration}</small></div><div className={"customer-avatar "+a.color}>{a.initials}</div><div className="appointment-info"><strong>{a.customer}</strong><small>{a.service} · {a.staff}</small></div><span className={"status "+a.status.toLowerCase()}>{a.status}</span>{a.status === "Confirmed" && <button className="row-menu" title="Cancel appointment" onClick={() => cancelAppointment(a.id)}><MoreHorizontal size={17}/></button>}{a.status === "Cancelled" && <button className="recover-button" onClick={() => recoverSlot(a.id)}>Recover slot</button>}</div>)}</div>
+                <button className="add-inline" onClick={() => setBookingOpen(true)}><Plus size={15}/> Add appointment</button>
+              </section>
 
-            <section className="panel assistant-panel"><div className="assistant-head"><div className="assistant-symbol"><Sparkles size={18}/></div><div><h2>AI operations assistant</h2><p>Your hotel’s operational co-pilot</p></div><span className="online-dot" /></div><div className="assistant-message"><div className="assistant-mini"><Sparkles size={13}/></div><div><strong>Good evening, Jordan.</strong><p>You have 2 tasks needing attention. The late check-in request for room 204 has been waiting for 2 minutes. Would you like me to draft a reply?</p></div></div><div className="suggestion-label">SUGGESTED ACTIONS</div><button className="suggestion" onClick={() => setShowAssistant(true)}>Summarise today’s operations <ArrowUpRight size={14}/></button><button className="suggestion" onClick={() => setShowAssistant(true)}>Show messages needing a reply <ArrowUpRight size={14}/></button><button className="assistant-cta" onClick={() => setShowAssistant(true)}>Open AI assistant <ArrowUpRight size={15}/></button></section>
-          </div>
+              <section className="panel assistant-panel"><div className="assistant-title"><div className="assistant-logo"><Sparkles size={18}/></div><div><h2>AI booking assistant</h2><p>Customer communication, handled.</p></div><span className="live-indicator">DEMO</span></div><div className="assistant-preview"><div className="assistant-avatar"><Sparkles size={13}/></div><div><strong>Good morning!</strong><p>You have {cancelled} cancelled appointment{cancelled === 1 ? "" : "s"} today. I can help find a customer from your waiting list to fill an open slot.</p></div></div><div className="suggestion-label">TRY THE DEMO</div><button className="suggestion" onClick={() => setAssistantOpen(true)}>Show today's booking summary <ArrowUpRight size={14}/></button><button className="suggestion" onClick={() => setAssistantOpen(true)}>Draft a reply to a customer <ArrowUpRight size={14}/></button><button className="assistant-open" onClick={() => setAssistantOpen(true)}>Open AI assistant <ArrowUpRight size={15}/></button></section>
+            </div>
 
-          <section className="bottom-panel"><div className="bottom-title"><div><h2>Guest activity</h2><p>Recent conversations across your channels.</p></div><button className="text-button" onClick={() => setActive("Guest messages")}>All conversations <ArrowUpRight size={14}/></button></div><div className="guest-activity"><div className="guest-line"><div className="guest-avatar peach">OM</div><div className="guest-info"><strong>Olivia Martin</strong><small>WhatsApp · “Could you arrange an airport transfer?”</small></div><span className="guest-tag">New message</span><time>4 min ago</time></div><div className="guest-line"><div className="guest-avatar lilac">LB</div><div className="guest-info"><strong>Lucas Bennett</strong><small>Email · “Thank you for the lovely stay!”</small></div><span className="guest-tag answered">Answered</span><time>22 min ago</time></div><div className="guest-line"><div className="guest-avatar mint">SC</div><div className="guest-info"><strong>Sophia Chen</strong><small>Website · “Is early check-in available?”</small></div><span className="guest-tag">New message</span><time>39 min ago</time></div></div></section>
-          <footer>NÜDLING AI <span>·</span> HOSPITALITY OPERATIONS <span className="footer-right">DEMO ENVIRONMENT · SAMPLE DATA</span></footer>
+            <section className="panel activity-panel"><div className="panel-title"><div><h2>Recent customer activity</h2><p>Example conversations from your connected channels.</p></div><button className="link-button" onClick={() => setActiveTab("Customers")}>View customers <ArrowRight size={14}/></button></div><div className="activity-row"><div className="channel-icon whatsapp"><MessageCircle size={16}/></div><div className="activity-copy"><strong>Lisa Müller</strong><small>WhatsApp · “Do you have any appointments available tomorrow?”</small></div><span className="activity-time">5 min ago</span><span className="unread-tag">New</span></div><div className="activity-row"><div className="channel-icon email"><UserRound size={16}/></div><div className="activity-copy"><strong>Tom Becker</strong><small>WhatsApp · “I need to move my appointment to Friday.”</small></div><span className="activity-time">18 min ago</span><span className="answered-tag">Handled</span></div></section>
+          </>}
+
+          {activeTab === "Appointments" && <section className="panel full-panel"><div className="panel-title"><div><h2>All appointments</h2><p>Manage bookings, cancellations and open slots.</p></div><button className="primary-button compact" onClick={() => setBookingOpen(true)}><Plus size={15}/> Add booking</button></div><div className="table-head"><span>TIME</span><span>CUSTOMER</span><span>SERVICE</span><span>STAFF</span><span>STATUS</span><span>ACTION</span></div>{filteredAppointments.map(a => <div className="table-row" key={a.id}><strong>{a.time}</strong><span>{a.customer}</span><span>{a.service}</span><span>{a.staff}</span><span><i className={"status "+a.status.toLowerCase()}>{a.status}</i></span><span>{a.status === "Confirmed" ? <button className="table-action" onClick={() => cancelAppointment(a.id)}>Cancel</button> : a.status === "Cancelled" ? <button className="table-action recover" onClick={() => recoverSlot(a.id)}>Recover slot</button> : <span className="muted">Waiting</span>}</span></div>)}</section>}
+
+          {activeTab === "Customers" && <section className="panel full-panel"><div className="panel-title"><div><h2>Customers</h2><p>Customer list and recent activity. Demo records only.</p></div></div>{[["Lisa Müller","LM","WhatsApp","Returning customer"],["Tom Becker","TB","WhatsApp","Appointment change"],["Sophie Weber","SW","In person","Regular customer"],["Daniel Fischer","DF","WhatsApp","Regular customer"],["Emma Schneider","ES","Instagram","New customer"]].map((c,i)=><div className="customer-list-row" key={c[0]}><div className={"customer-avatar "+["lavender","blue","peach","mint","pink"][i]}>{c[1]}</div><div className="customer-name"><strong>{c[0]}</strong><small>{c[2]}</small></div><span className="customer-note">{c[3]}</span><button className="table-action" onClick={() => setAssistantOpen(true)}>Message</button></div>)}</section>}
+
+          {activeTab === "Services" && <section className="panel full-panel"><div className="panel-title"><div><h2>Your services</h2><p>Set the services, durations and prices customers see when booking.</p></div><button className="primary-button compact" onClick={() => { const name=window.prompt("Service name"); if(name?.trim()) setServices(s=>[...s,{id:Date.now(),name:name.trim(),duration:30,price:25}]); }}><Plus size={15}/> Add service</button></div><div className="service-grid">{services.map(s=><article className="service-card" key={s.id}><div className="service-icon"><Scissors size={18}/></div><strong>{s.name}</strong><div className="service-meta"><span><Clock3 size={13}/> {s.duration} min</span><b>€{s.price}</b></div><button className="service-edit" onClick={() => {const price=window.prompt("Set price in euros",String(s.price)); if(price && !Number.isNaN(Number(price))) setServices(current=>current.map(x=>x.id===s.id?{...x,price:Number(price)}:x));}}>Edit price</button></article>)}</div></section>}
+
+          {activeTab === "Settings" && <section className="panel settings-panel"><div className="settings-section"><div><h2>Business profile</h2><p>Personalise the assistant for your business.</p></div><label>Business name<input value={businessName} onChange={e=>setBusinessName(e.target.value)} /></label><label>Business type<select value={businessType} onChange={e=>setBusinessType(e.target.value)}><option>Barbershop</option><option>Hair salon</option><option>Nail salon</option><option>Beauty studio</option><option>Other appointment business</option></select></label><label>Business location<input defaultValue="Barcelona, Spain" /></label><button className="primary-button compact" onClick={()=>notify("Business profile saved in this demo.")}>Save changes</button></div><div className="settings-section"><h2>Assistant behaviour</h2><p>Choose what your assistant should help with. These controls are a product preview.</p>{["Answer questions about services and prices","Book and reschedule appointments","Send appointment reminders","Follow up on cancellations and waiting lists","Hand over complex requests to a person"].map((v,i)=><label className="toggle-row" key={v}><span>{v}</span><input type="checkbox" defaultChecked={i!==3}/></label>)}</div><div className="settings-section"><h2>Opening hours</h2><p>Example schedule. We will make these settings editable in the next build.</p>{["Monday – Friday","Saturday","Sunday"].map((v,i)=><div className="hours-row" key={v}><span>{v}</span><strong>{i===2?"Closed":i===1?"10:00 – 16:00":"09:00 – 19:00"}</strong></div>)}</div></section>}
+
+          <footer className="footer">STUDIOFLOW <span>·</span> APPOINTMENT BUSINESS ASSISTANT <span className="footer-right">DEMO ENVIRONMENT · SAMPLE DATA</span></footer>
         </div>
       </section>
 
-      {showAssistant && <div className="modal-backdrop" onClick={() => setShowAssistant(false)}><section className="assistant-modal" onClick={(e) => e.stopPropagation()}><div className="modal-top"><div className="assistant-symbol"><Sparkles size={18}/></div><div><h2>AI operations assistant</h2><p>Demo interface · AI connection not configured</p></div><button className="icon-button" onClick={() => setShowAssistant(false)}>×</button></div><div className="modal-body"><div className="assistant-message"><div className="assistant-mini"><Sparkles size={13}/></div><div><strong>What would you like help with?</strong><p>Ask about guest messages, daily operations, room readiness or team tasks. This is currently a frontend prototype using sample data.</p></div></div><div className="quick-prompts"><button onClick={() => setQuery("Summarise today's hotel operations")}>Summarise today</button><button onClick={() => setQuery("Which guest messages need a reply?")}>Messages needing replies</button></div></div><form className="chat-input" onSubmit={(e) => {e.preventDefault(); setQuery("");}}><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ask your hotel assistant..." /><button type="submit" aria-label="Send message"><ArrowUpRight size={17}/></button></form></section></div>}
+      {bookingOpen && <div className="overlay" onClick={()=>setBookingOpen(false)}><section className="modal" onClick={e=>e.stopPropagation()}><div className="modal-heading"><div><h2>New appointment</h2><p>Add a booking to the demo schedule.</p></div><button className="close-button" onClick={()=>setBookingOpen(false)}><X size={18}/></button></div><label>Customer name<input autoFocus value={newCustomer} onChange={e=>setNewCustomer(e.target.value)} placeholder="e.g. Jamie Smith"/></label><label>Service<select value={newService} onChange={e=>setNewService(e.target.value)}>{services.map(s=><option key={s.id}>{s.name}</option>)}</select></label><label>Time<input type="time" value={newTime} onChange={e=>setNewTime(e.target.value)}/></label><button className="primary-button modal-submit" onClick={addAppointment} disabled={!newCustomer.trim()}>Add appointment <ArrowRight size={15}/></button></section></div>}
+
+      {assistantOpen && <div className="overlay" onClick={()=>setAssistantOpen(false)}><section className="chat-modal" onClick={e=>e.stopPropagation()}><div className="chat-heading"><div className="assistant-logo"><Sparkles size={18}/></div><div><h2>AI booking assistant</h2><p>Prototype · AI and messaging integrations not connected</p></div><button className="close-button" onClick={()=>setAssistantOpen(false)}><X size={18}/></button></div><div className="chat-body">{chatMessages.map((m,i)=><div className={m.role==="assistant"?"chat-bubble assistant-bubble":"chat-bubble user-bubble"} key={i}>{m.text}</div>)}</div><form className="chat-compose" onSubmit={e=>{e.preventDefault();sendChat();}}><input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder="Ask about bookings or customers..."/><button type="submit" aria-label="Send message"><Send size={16}/></button></form></section></div>}
+
+      {toast && <div className="toast"><CheckCircle2 size={16}/>{toast}</div>}
     </main>
   );
 }
